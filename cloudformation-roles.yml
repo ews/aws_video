@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+#
+# Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+Description: Mobile Hub project extension for Video Transcoding.
+
+Parameters:
+  UserFilesS3BucketPattern:
+    Description: Pattern for User Data Storage S3 bucket permissions.
+    Type: String
+  HostingS3BucketPattern:
+    Description: Pattern for Hosting S3 bucket permissions.
+    Type: String
+  HostingS3Bucket:
+    Description: Hosting S3 bucket name.
+    Type: String
+  TranscoderPipelineRoleName:
+    Description: Name of IAM Role assumed by Elastic Transcoder.
+    Type: String
+  LambdaExecutionRoleName:
+    Description: Name of IAM Role assumed by Lambda.
+    Type: String
+
+Resources:
+  TranscoderLambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName:
+        Ref: LambdaExecutionRoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Path: "/"
+  TranscoderLambdaExecutionPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "TranscoderLambdaExecutionPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "S3:GetObject"
+            Resource:
+              - Ref: UserFilesS3BucketPattern
+          - Effect: Allow
+            Action:
+              - "S3:PutObject"
+            Resource:
+              - Ref: HostingS3BucketPattern
+          - Effect: Allow
+            Action:
+              - "S3:ListBucket"
+            Resource:
+              - Ref: HostingS3Bucket
+          - Effect: Allow
+            Action:
+              - "elastictranscoder:CreateJob"
+            Resource: "*"
+      Roles:
+        - Ref: "TranscoderLambdaExecutionRole"
+  TranscoderPipelineRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName:
+        Ref: TranscoderPipelineRoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "elastictranscoder.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+  TranscoderPipelinePolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: "TranscoderPipelinePolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "S3:Get*"
+              - "S3:List*"
+            Resource:
+              - Ref: UserFilesS3BucketPattern
+              - Ref: HostingS3BucketPattern
+              - Ref: HostingS3Bucket
+          - Effect: Allow
+            Action:
+              - "S3:Put*"
+              - "S3:*Multipart*"
+            Resource:
+              - Ref: HostingS3BucketPattern
+      Roles:
+        - Ref: TranscoderPipelineRole
+
+Outputs:
+  TranscoderPipelineRoleARN:
+    Value:
+      Fn::GetAtt: TranscoderPipelineRole.Arn
+  TranscoderLambdaExecutionRoleARN:
+    Value:
+      Fn::GetAtt: TranscoderLambdaExecutionRole.Arn
